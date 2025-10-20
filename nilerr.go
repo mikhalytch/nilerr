@@ -172,14 +172,12 @@ func isReturnNil(b *ssa.BasicBlock) *ssa.Return {
 		// func(...) (a,b,...,z) -> Store a, Store b, ..., Store z, RunDefers
 		deferredResults := make([]ssa.Value, 0, len(res))
 		for idx, i := range b.Instrs {
-			if ok := isRunDeferP(i); ok && idx == len(res) {
-				return deferredResults // kosher defer
-			} else if idx == len(res) || ok {
-				return res
-			} else if store, ok := i.(*ssa.Store); !ok {
-				return res
-			} else {
+			if store, storeOk := i.(*ssa.Store); storeOk { // up to defer in right idx
 				deferredResults = append(deferredResults, store.Val)
+			} else if rdOk := isRunDeferP(i); rdOk && idx == len(res) {
+				return deferredResults // kosher defer
+			} else {
+				break
 			}
 		}
 		return res
