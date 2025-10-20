@@ -163,8 +163,28 @@ func isReturnNil(b *ssa.BasicBlock) *ssa.Return {
 		return nil
 	}
 
+	retResults := func() []ssa.Value {
+		res := ret.Results
+		// func(...) (a,b,...,z) -> Store a, Store b, ..., Store z, RunDefers
+		deferredResults := make([]ssa.Value, 0, len(res))
+		for idx := 0; idx < len(b.Instrs); idx++ {
+			i := b.Instrs[idx]
+
+			if _, ok := i.(*ssa.RunDefers); ok && idx == len(res) {
+				return deferredResults // kosher defer
+			} else if idx == len(res) || ok {
+				return res
+			} else if store, ok := i.(*ssa.Store); !ok {
+				return res
+			} else {
+				deferredResults = append(deferredResults, store.Val)
+			}
+		}
+		return res
+	}()
+
 	errorReturnValues := 0
-	for _, res := range ret.Results {
+	for _, res := range retResults {
 		if !types.Implements(res.Type(), errType) {
 			continue
 		}
